@@ -26,6 +26,8 @@ from itertools import combinations
 df = pd.read_csv(r"C:\Users\KATT\Documents\ProteinInteraPredict\Modified_df.csv")
 
 
+""" TOKENIZATION OF AMINO ACIDS"""
+
 # Define a dictionary for amino acid tokens
 amino_acid_tokens = {'-': 0,'A': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7, 'I': 8, 'K': 9, 'L': 10,
                      'M': 11, 'N': 12, 'P': 13, 'Q': 14, 'R': 15, 'S': 16, 'T': 17, 'V': 18, 'W': 19, 'Y': 20,
@@ -37,28 +39,31 @@ def tokenize_sequence(sequence, tokenizer=amino_acid_tokens):
     return [tokenizer.get(aa, tokenizer['UNK']) for aa in sequence]
 
 # Applying the tokenization function to each protein sequence in the DataFrame
-df['tokenized_sequence'] = df['Sequence'].apply(tokenize_sequence)
+df['Sequence Tokens'] = df['Sequence'].apply(tokenize_sequence)
 
 
+"""CALCULATING CLOSEST amino acids(in the distance of 6-8 A)"""
 
-# Updated calculate_top_20_pairs function with validity checks for the coordinates
-def calculate_top_20_pairs(coords1, coords2):
-    if coords1 is None or coords2 is None or len(coords1) % 3 != 0 or len(coords2) % 3 != 0:
+# Updated function to calculate pairs within a specified distance
+def calculate_pairs_within_distance(coords1, coords2, min_dist=6, max_dist=8):
+    if coords1 is None or coords2 is None:
         return None
-    try:
-        coords1_np = np.array(coords1).reshape(-1, 3).astype('float32')
-        coords2_np = np.array(coords2).reshape(-1, 3).astype('float32')
-    except ValueError as e:
-        print(f"Reshape error: {e}")
-        return None
+    coords1_np = np.array(coords1).reshape(-1, 3).astype('float32')
+    coords2_np = np.array(coords2).reshape(-1, 3).astype('float32')
     index = faiss.IndexFlatL2(3)
     index.add(coords2_np)
-    _, indices = index.search(coords1_np, 21)
-    return indices[:, 1:]
+    squared_min_dist = min_dist ** 2
+    squared_max_dist = max_dist ** 2
+    distances, indices = index.search(coords1_np, len(coords2_np))
+    filtered_indices = []
+    for dist, idx in zip(distances, indices):
+        mask = (dist >= squared_min_dist) & (dist <= squared_max_dist)
+        filtered_indices.append(idx[mask])
+    return filtered_indices
 
 # Function to mask sequences based on indices of closest amino acids
 def mask_sequence(sequence, indices):
-    if indices is None:  # Check if indices are None before proceeding
+    if indices is None:
         return None
     masked_sequence = ['-' for _ in sequence]
     for index_set in indices:
@@ -67,34 +72,53 @@ def mask_sequence(sequence, indices):
                 masked_sequence[idx] = sequence[idx]
     return ''.join(masked_sequence)
 
-# Prepare the DataFrame for pairwise comparison
-# Extract 'pair_id' from 'File Name' assuming it can be identified as the first 4 characters
-df['pair_id'] = df['File Name'].apply(lambda x: x[:4])  # Adjust according to your 'File Name' structure
 
 pairs_list = []
-
 # Generate pairwise comparisons for proteins within a group
 for pair_id, group in df.groupby('pair_id'):
-    if group.shape[0] > 1:  # Ensure group has more than one member for comparison
+    if group.shape[0] > 1:
         for (idx1, row1), (idx2, row2) in combinations(group.iterrows(), 2):
-            top_20_indices_1 = calculate_top_20_pairs(row1['Normalized Coordinates'], row2['Normalized Coordinates'])
-            top_20_indices_2 = calculate_top_20_pairs(row2['Normalized Coordinates'], row1['Normalized Coordinates'])
-
-            # Proceed only if valid indices were returned
-            if top_20_indices_1 is not None and top_20_indices_2 is not None:
-                masked_seq_1 = mask_sequence(row1['Sequence'], top_20_indices_1)
-                masked_seq_2 = mask_sequence(row2['Sequence'], top_20_indices_2)
-
+            distance_indices_1 = calculate_pairs_within_distance(row1['Normalized Coordinates'], row2['Normalized Coordinates'])
+            distance_indices_2 = calculate_pairs_within_distance(row2['Normalized Coordinates'], row1['Normalized Coordinates'])
+            if distance_indices_1 is not None and distance_indices_2 is not None:
+                masked_seq_1 = mask_sequence(row1['Sequence'], distance_indices_1)
+                masked_seq_2 = mask_sequence(row2['Sequence'], distance_indices_2)
                 pairs_list.append({
-                  'pair_id': pair_id,
-                  'File Name A': row1['File Name'],
-                  'File Name B': row2['File Name'],
-                  'masked_sequence_A': masked_seq_1,
-                  'masked_sequence_B': masked_seq_2,
-                  'coords_A': row1['Normalized Coordinates'],  # Adding initial coordinates for protein A
-                  'coords_B': row2['Normalized Coordinates'],  # Adding initial coordinates for protein B
-              })
-
+                    'pair_id': pair_id,
+                    'File Name A': row1['File Name'],
+                    'File Name B': row2['File Name'],
+                    'masked_sequence_A': masked_seq_1,
+                    'masked_sequence_B': masked_seq_2,
+                    'coords_A': row1['Normalized Coordinates'],
+                    'coords_B': row2['Normalized Coordinates'],
+                })
 
 # Creating a DataFrame from pairs_list to hold the results
 pairs_df = pd.DataFrame(pairs_list)
+
+# Merging to add embeddings and sequences for 'File Name A' and 'File Name B'
+pairs_df = pairs_df.merge(df[['File Name', 'Embeddings', 'Sequence']],
+                          left_on='File Name A',
+                          right_on='File Name',
+                          how='left',
+                          suffixes=('', '_A'))
+pairs_df = pairs_df.merge(df[['File Name', 'Embeddings', 'Sequence']],
+                          left_on='File Name B',
+                          right_on='File Name',
+                          how='left',
+                          suffixes=('_A', '_B'))
+pairs_df.drop(columns=['File Name_A', 'File Name_B'], inplace=True)
+
+# Tokenization and summation functions (implement tokenize_sequence as per your requirement)
+# def tokenize_sequence(sequence): ...
+# def sum_tokenized_sequences(seq_tokens, masked_tokens): ...
+
+pairs_df['tokenized_sequence_A'] = pairs_df['Sequence_A'].apply(tokenize_sequence)
+pairs_df['tokenized_sequence_B'] = pairs_df['Sequence_B'].apply(tokenize_sequence)
+pairs_df['tokenized_masked_sequence_A'] = pairs_df['masked_sequence_A'].apply(tokenize_sequence)
+pairs_df['tokenized_masked_sequence_B'] = pairs_df['masked_sequence_B'].apply(tokenize_sequence)
+
+def sum_tokenized_sequences(seq_tokens, masked_tokens):
+    return [seq + masked for seq, masked in zip(seq_tokens, masked_tokens)]
+
+pairs_df['sum_tokenized_sequence_A'] = pairs_df.apply(lambda row: sum_tokenized_sequences(row['tokenized_sequence_A'], row['
