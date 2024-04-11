@@ -1,3 +1,15 @@
+"""
+In general, while terminal interactions are important and have specific functional roles, 
+the vast majority of protein-protein interactions involve the central portions of the proteins.
+ These interactions are facilitated by the structural configuration, functional requirements,
+   and evolutionary conservation of the protein interaction sites. Thus, it can be said that most 
+   interactions indeed occur outside of the terminal 10% regions at each end of the proteins,
+   involving more central areas of the molecular structures.
+"""
+
+
+
+
 # Import required libraries
 from transformers import BertTokenizer, BertModel
 

@@ -1,4 +1,15 @@
-import numpy as np
+"""
+The script processes a dataset on protein interactions by loading a CSV file,
+cleaning up filenames by removing file extensions, 
+and parsing 3D coordinate data from strings into tuples. 
+It includes error handling to omit rows with invalid data and filters the dataset to retain only protein
+sequences over 20 characters long. The cleaned and validated data is then saved to a new CSV file for 
+further analysis or modeling tasks in computational biology, ensuring that all entries have 
+valid coordinates and appropriately long sequences.
+
+If you want to use this block of code you can access it by our biopdbkit exe file.
+"""
+
 import pandas as pd
 
 # Load the CSV file into a DataFrame

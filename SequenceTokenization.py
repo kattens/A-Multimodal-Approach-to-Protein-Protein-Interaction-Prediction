@@ -1,6 +1,4 @@
 '''
-THE FIRST THING IS TO SETUP YOUR ENVIROMENT WITH THE NECCESSARY LIBRARIES
-
 # Install necessary libraries
 !pip install faiss-gpu
 !pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
