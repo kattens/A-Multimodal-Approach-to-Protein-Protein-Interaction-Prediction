@@ -55,3 +55,21 @@ df = df[df['Sequence'].apply(lambda x: len(x) > 20 and x is not None)]
 
 new_df = df.copy()
 new_df.to_csv(r"C:\Users\KATT\Documents\ProteinInteraPredict\Modified_df.csv", index= False)
+
+#if you wanna modify the length of the sequences use the code below:
+
+'''
+
+# Truncate each specified column to a maximum length of 500 characters
+columns = ['masked_sequence_A', 'masked_sequence_B', 'Sequence_A', 'Sequence_B']
+for col in columns:
+    pairs_df[col] = pairs_df[col].apply(lambda x: x[:500] if len(x) > 500 else x)
+
+# Find the longest string by length
+pairs_df['Length'] = pairs_df['masked_sequence_A'].apply(len)
+longest_string = pairs_df.loc[pairs_df['Length'].idxmax(), 'masked_sequence_A']
+print(len(longest_string))
+
+
+
+'''
